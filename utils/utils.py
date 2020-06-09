@@ -18,9 +18,9 @@ from stable_baselines.sac.policies import FeedForwardPolicy as SACPolicy
 from stable_baselines.ddpg.policies import FeedForwardPolicy as DDPGPolicy
 
 from algos import DDPG, SAC, PPO2
-from donkey_gym.envs.vae_env import DonkeyVAEEnv
+from donkey_gym.envs.vae_env import DonkeyEnv
 from vae.controller import VAEController
-from config import MIN_THROTTLE, MAX_THROTTLE, MAX_CTE_ERROR, LEVEL, FRAME_SKIP, \
+from config import MIN_THROTTLE, MAX_THROTTLE, MAX_CTE_ERROR, FRAME_SKIP, \
     N_COMMAND_HISTORY, TEST_FRAME_SKIP
 
 ALGOS = {
@@ -95,15 +95,16 @@ def load_vae(path=None, z_size=None):
     return vae
 
 
-def make_env(seed=0, log_dir=None, vae=None, frame_skip=None,
+def make_env(level=0, seed=0, log_dir=None, vae=None, frame_skip=None,
              teleop=False, n_stack=1):
     """
     Helper function to multiprocess training
     and log the progress.
 
-    :param seed: (int)
+    :param level: (int) level index
+    :param seed: (int) random seed
     :param log_dir: (str)
-    :param vae: (str)
+    :param vae: (VAEController)
     :param frame_skip: (int)
     :param teleop: (bool)
     """
@@ -116,9 +117,25 @@ def make_env(seed=0, log_dir=None, vae=None, frame_skip=None,
 
     def _init():
         set_global_seeds(seed)
-        env = DonkeyVAEEnv(level=LEVEL, frame_skip=frame_skip, vae=vae, const_throttle=None, min_throttle=MIN_THROTTLE,
-                           max_throttle=MAX_THROTTLE, max_cte_error=MAX_CTE_ERROR, n_command_history=N_COMMAND_HISTORY,
-                           n_stack=n_stack)
+        conf={}
+        #conf['level']=LEVEL
+        conf['frame_skip']=frame_skip
+        conf['vae']=vae
+        conf['const_throttle']=None
+        conf['min_throttle']=MIN_THROTTLE
+        conf['max_throttle']=MAX_THROTTLE
+        conf['max_cte']=MAX_CTE_ERROR
+        conf['n_command_history']=N_COMMAND_HISTORY
+        conf['n_stack']=n_stack
+        conf['body_style']= 'donkey'
+        conf['body_rgb']= (128, 128, 128)
+        conf['car_name']= 'car'
+        conf['font_size']= 100
+        conf['racer_name']= 'B3'
+        conf['country']= 'DE'
+        conf['bio']= 'supersticiousCodingInTheScripts'
+        
+        env = DonkeyEnv(level=level, conf=conf)
         env.seed(seed)
         if not teleop:
             env = Monitor(env, log_dir, allow_early_resets=True)
@@ -127,11 +144,12 @@ def make_env(seed=0, log_dir=None, vae=None, frame_skip=None,
     return _init
 
 
-def create_test_env(stats_path=None, seed=0,
+def create_test_env(level=0, stats_path=None, seed=0,
                     log_dir='', hyperparams=None):
     """
     Create environment for testing a trained agent
 
+    :param level: (int)
     :param stats_path: (str) path to folder containing saved running averaged
     :param seed: (int) Seed for random number generator
     :param log_dir: (str) Where to log rewards
@@ -152,7 +170,7 @@ def create_test_env(stats_path=None, seed=0,
     if stats_path is not None and os.path.isfile(vae_path):
         vae = load_vae(vae_path)
 
-    env = DummyVecEnv([make_env(seed, log_dir, vae=vae,
+    env = DummyVecEnv([make_env(level, seed, log_dir, vae=vae,
                                 frame_skip=TEST_FRAME_SKIP)])
 
     # Load saved stats for normalizing input and rewards

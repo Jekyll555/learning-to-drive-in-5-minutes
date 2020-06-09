@@ -1,16 +1,28 @@
 DonkeyVae-v0:
   # normalize: "{'norm_obs': True, 'norm_reward': False}"
-  n_timesteps: !!float 5000
   # policy: 'TinySACPolicy'
   policy: 'CustomSACPolicy'
+  # policy: 'MlpPolicy'
+  gamma: 0.99
   learning_rate: !!float 3e-4
   # learning_rate: lin_3e-3
   buffer_size: 30000
-  batch_size: 64
-  train_freq: 3000
-  gamma: 0.99
-  ent_coef: 'auto_0.1'
-  # ent_coef: 0.05
-  gradient_steps: 600
   learning_starts: 300
+  train_freq: 3000
+  batch_size: 64
+  # tau: 0.005
+  # ent_coef: 0.05
+  ent_coef: 'auto_0.1' 
+  # target_update_interval: 1 
+  gradient_steps: 600
+  # target_entropy='auto'
+  # action_noise=None
+  # random_exploration=0.0
+  # verbose=0
+  # tensorboard_log=None
+  # _init_setup_model=True
+  # full_tensorboard_log=False
+  # n_cpu_tf_sess=None
+  n_timesteps: !!float 5000
   # frame_stack: 3
+  # policy_kwargs: "dict(layers=[32, 32])"

@@ -2,18 +2,42 @@
 # Edited by Antonin Raffin
 import os
 import warnings
-
-import gym
+import logging
+import time
 import numpy as np
+import gym
 from gym import spaces
 from gym.utils import seeding
 
 from config import INPUT_DIM, MIN_STEERING, MAX_STEERING, JERK_REWARD_WEIGHT, MAX_STEERING_DIFF
-from donkey_gym.core.donkey_proc import DonkeyUnityProcess
-from .donkey_sim import DonkeyUnitySimContoller
+from donkey_gym.envs.donkey_sim import DonkeyUnitySimContoller
+from donkey_gym.envs.donkey_proc import DonkeyUnityProcess
+
+logger = logging.getLogger(__name__)
+
+def supply_defaults(conf):
+    defaults = [("start_delay", 5.0),
+                ("max_cte", 5.0), #TODO check w max_cte_error
+                ("frame_skip", 1),
+                ("cam_resolution", (120,160,3)),
+                ("log_level", logging.INFO),
+                ("const_throttle", None),
+                ("min_throttle", 0.2),
+                ("max_throttle", 0.5),
+                ("n_command_history", 0),
+                ("n_stack", 1),
+                ("exe_path", None),
+                ("host", "127.0.0.1"),
+                ("port", 9091),
+                ("vae", 'sac')                ]
+
+    for key, val in defaults:
+        if not key in conf:
+            conf[key] = val
+            print("setting default: %s %s" % (key, val.__str__()))
 
 
-class DonkeyVAEEnv(gym.Env):
+class DonkeyEnv(gym.Env):
     """
     Gym interface for DonkeyCar with support for using
     a VAE encoded observation instead of raw pixels if needed.
@@ -34,26 +58,46 @@ class DonkeyVAEEnv(gym.Env):
         "render.modes": ["human", "rgb_array"],
     }
 
-    def __init__(self, level=0, frame_skip=2, vae=None, const_throttle=None,
+    ACTION_NAMES = ["steer", "throttle"]
+    VAL_PER_PIXEL = 255
+    
+    '''
+    def __init__(self, level=0, host='127.0.0.1', port=9091, frame_skip=2, vae=None, const_throttle=None,
                  min_throttle=0.2, max_throttle=0.5,
                  max_cte_error=3.0, n_command_history=0,
                  n_stack=1):
-        self.vae = vae
-        self.z_size = None
-        if vae is not None:
-            self.z_size = vae.z_size
+    '''
+    def __init__(self, level, conf):
+        print("starting DonkeyGym env")
+        self.viewer = None
+        self.proc = None
+        conf["level"] = level
 
-        self.const_throttle = const_throttle
-        self.min_throttle = min_throttle
-        self.max_throttle = max_throttle
+        # ensure defaults are supplied if missing.
+        supply_defaults(conf)   
+        
+        # set logging level
+        logging.basicConfig(level=conf["log_level"])
+        logger.debug("DEBUG ON")
+        logger.debug(conf)
+
+        #VAE
+        self.vae = conf['vae']
+        self.z_size = None
+        if self.vae is not None:
+            self.z_size = self.vae.z_size
+
+        self.const_throttle = conf['const_throttle']
+        self.min_throttle = conf['min_throttle']
+        self.max_throttle = conf['max_throttle']
         self.np_random = None
 
         # Save last n commands (throttle + steering)
         self.n_commands = 2
-        self.command_history = np.zeros((1, self.n_commands * n_command_history))
-        self.n_command_history = n_command_history
+        self.command_history = np.zeros((1, self.n_commands * conf['n_command_history']))
+        self.n_command_history = conf['n_command_history']
         # Custom frame-stack
-        self.n_stack = n_stack
+        self.n_stack = conf['n_stack']
         self.stacked_obs = None
 
         # Check for env variable
@@ -65,58 +109,94 @@ class DonkeyVAEEnv(gym.Env):
         # TCP port for communicating with simulation
         port = int(os.environ.get('DONKEY_SIM_PORT', 9091))
 
-        self.unity_process = None
-        if exe_path is not None:
+        self.proc = None
+        if conf['exe_path'] is not None:
             print("Starting DonkeyGym env")
             # Start Unity simulation subprocess if needed
-            self.unity_process = DonkeyUnityProcess()
+            self.proc = DonkeyUnityProcess()
             headless = os.environ.get('DONKEY_SIM_HEADLESS', False) == '1'
-            self.unity_process.start(exe_path, headless=headless, port=port)
+            self.proc.start(conf['exe_path'], host='0.0.0.0', headless=headless, port=conf['port'])
+
+            # wait for simulator to startup and begin listening
+            time.sleep(conf["start_delay"])
 
         # start simulation com
-        self.viewer = DonkeyUnitySimContoller(level=level, port=port, max_cte_error=max_cte_error)
+        self.viewer = DonkeyUnitySimContoller(conf=conf)
 
-        if const_throttle is not None:
+        if self.const_throttle is not None:
             # steering only
-            self.action_space = spaces.Box(low=np.array([-MAX_STEERING]),
+            self.action_space = spaces.Box(low=np.array([MIN_STEERING]),
                                            high=np.array([MAX_STEERING]),
                                            dtype=np.float32)
         else:
-            # steering + throttle, action space must be symmetric
-            self.action_space = spaces.Box(low=np.array([-MAX_STEERING, -1]),
-                                           high=np.array([MAX_STEERING, 1]), dtype=np.float32)
+        # steering and throttle
+            self.action_space = spaces.Box(low=np.array([MIN_STEERING, self.min_throttle]),
+                            high=np.array([MAX_STEERING, self.max_throttle]), dtype=np.float32)
 
-        if vae is None:
+
+        if self.vae is None:
+            '''
             # Using pixels as input
             if n_command_history > 0:
                 warnings.warn("n_command_history not supported for images"
                               "(it will not be concatenated with the input)")
             self.observation_space = spaces.Box(low=0, high=255,
                                                 shape=INPUT_DIM, dtype=np.uint8)
+            '''
+            # camera sensor data
+            self.observation_space = spaces.Box(
+                0, self.VAL_PER_PIXEL, self.viewer.get_sensor_size(), dtype=np.uint8)
+
         else:
             # z latent vector from the VAE (encoded input image)
             self.observation_space = spaces.Box(low=np.finfo(np.float32).min,
                                                 high=np.finfo(np.float32).max,
-                                                shape=(1, self.z_size + self.n_commands * n_command_history),
+                                                shape=(1, self.z_size + self.n_commands * self.n_command_history),
                                                 dtype=np.float32)
 
         # Frame-stacking with teleoperation
-        if n_stack > 1:
+        if self.n_stack > 1:
             obs_space = self.observation_space
             low = np.repeat(obs_space.low, self.n_stack, axis=-1)
             high = np.repeat(obs_space.high, self.n_stack, axis=-1)
             self.stacked_obs = np.zeros(low.shape, low.dtype)
             self.observation_space = spaces.Box(low=low, high=high, dtype=obs_space.dtype)
 
+        # simulation related variables.
         self.seed()
+
         # Frame Skipping
-        self.frame_skip = frame_skip
+        self.frame_skip = conf["frame_skip"]
+
         # wait until loaded
         self.viewer.wait_until_loaded()
 
+
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        if self.viewer is not None:
+            self.viewer.quit()
+        if self.proc is not None:
+            self.proc.quit()
+
+    def set_reward_fn(self, reward_fn):
+        self.viewer.set_reward_fn(reward_fn)
+
+    def set_episode_over_fn(self, ep_over_fn):
+        self.viewer.set_episode_over_fn(ep_over_fn)
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
+
+    #TODO check used anymore?
     def close_connection(self):
         return self.viewer.close_connection()
 
+    #TODO check used anymore?
     def exit_scene(self):
         self.viewer.handler.send_exit_scene()
 
@@ -171,7 +251,8 @@ class DonkeyVAEEnv(gym.Env):
             self.stacked_obs[..., -observation.shape[-1]:] = observation
             return self.stacked_obs, reward, done, info
 
-        return observation, reward, done, info
+        return self.vae.encode(observation), reward, done, info
+#        return observation, reward, done, info
 
     def step(self, action):
         """
@@ -194,36 +275,45 @@ class DonkeyVAEEnv(gym.Env):
             max_diff = (MAX_STEERING_DIFF - 1e-5) * (MAX_STEERING - MIN_STEERING)
             diff = np.clip(action[0] - prev_steering, -max_diff, max_diff)
             action[0] = prev_steering + diff
+        else :
+            action[0] = np.clip(action[0] , MIN_STEERING, MAX_STEERING)
 
         # Repeat action if using frame_skip
-        for _ in range(self.frame_skip):
+        for i in range(self.frame_skip):
+            #print("action steer {:3.2f} throttle {:3.2f}".format(action[0], action[1]))
             self.viewer.take_action(action)
-            observation, reward, done, info = self.observe()
+            observation, reward, done, info = self.viewer.observe()
 
         return self.postprocessing_step(action, observation, reward, done, info)
 
     def reset(self):
         self.viewer.reset()
         self.command_history = np.zeros((1, self.n_commands * self.n_command_history))
-        observation, reward, done, info = self.observe()
+        observation, reward, done, info = self.viewer.observe()
+
 
         if self.n_command_history > 0:
-            observation = np.concatenate((observation, self.command_history), axis=-1)
+            self.command_history = np.concatenate((info, self.command_history), axis=None)
 
         if self.n_stack > 1:
             self.stacked_obs[...] = 0
             self.stacked_obs[..., -observation.shape[-1]:] = observation
             return self.stacked_obs
+            
+        time.sleep(1)
+        return self.vae.encode(observation)
+#        return observation
 
-        return observation
-
-    def render(self, mode='human'):
+    def render(self, mode="human", close=False):
         """
         :param mode: (str)
         """
-        if mode == 'rgb_array':
-            return self.viewer.handler.original_image
-        return None
+        if close:
+            self.viewer.quit()
+        return self.viewer.render(mode)
+
+    def is_game_over(self):
+        return self.viewer.is_game_over()
 
     def observe(self):
         """
@@ -239,9 +329,10 @@ class DonkeyVAEEnv(gym.Env):
         return self.vae.encode(observation), reward, done, info
 
     def close(self):
-        if self.unity_process is not None:
-            self.unity_process.quit()
-        self.viewer.quit()
+        if self.proc is not None:
+            self.proc.quit()
+        if self.viewer is not None:
+            self.viewer.quit()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -252,3 +343,54 @@ class DonkeyVAEEnv(gym.Env):
         :param vae: (VAEController object)
         """
         self.vae = vae
+
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ##
+
+class GeneratedRoadsEnv(DonkeyEnv):
+
+    def __init__(self, *args, **kwargs):
+        super(GeneratedRoadsEnv, self).__init__(level=0, *args, **kwargs)
+
+
+class WarehouseEnv(DonkeyEnv):
+
+    def __init__(self, *args, **kwargs):
+        super(WarehouseEnv, self).__init__(level=1, *args, **kwargs)
+
+
+class AvcSparkfunEnv(DonkeyEnv):
+
+    def __init__(self, *args, **kwargs):
+        super(AvcSparkfunEnv, self).__init__(level=2, *args, **kwargs)
+
+
+class GeneratedTrackEnv(DonkeyEnv):
+
+    def __init__(self, *args, **kwargs):
+        super(GeneratedTrackEnv, self).__init__(level=3, *args, **kwargs)
+
+        
+class MountainTrackEnv(DonkeyEnv):
+
+    def __init__(self, *args, **kwargs):
+        super(MountainTrackEnv, self).__init__(level=4, *args, **kwargs)
+
+        
+# class IroncarTrackEnv(DonkeyEnv):
+
+    # def __init__(self, *args, **kwargs):
+        # super(IroncarTrackEnv, self).__init__(level=5, *args, **kwargs)
+
+        
+# class ChicaneTrackEnv(DonkeyEnv):
+
+    # def __init__(self, *args, **kwargs):
+        # super(ChicaneTrackEnv, self).__init__(level=6, *args, **kwargs)
+
+        
+# class CircleTrackEnv(DonkeyEnv):
+
+    # def __init__(self, *args, **kwargs):
+        # super(CircleTrackEnv, self).__init__(level=7, *args, **kwargs)
+

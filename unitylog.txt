@@ -1,0 +1,42 @@
+Mono path[0] = 'D:/donkey/DonkeySimWin/donkey_sim_Data/Managed'
+Mono config path = 'D:/donkey/DonkeySimWin/MonoBleedingEdge/etc'
+Initialize engine version: 2019.3.0f1 (ffacea4b84e7)
+[Subsystems] Discovering subsystems at path D:/donkey/DonkeySimWin/donkey_sim_Data/UnitySubsystems
+GfxDevice: creating device client; threaded=1
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.1]
+    Renderer: NVIDIA GeForce GTX 1060 6GB (ID=0x1c03)
+    Vendor:   
+    VRAM:     6052 MB
+    Driver:   26.21.14.4122
+Begin MonoManager ReloadAssembly
+- Completed reload, in  0.070 seconds
+D3D11 device created for Microsoft Media Foundation video decoding.
+<RI> Initializing input.
+XInput1_3.dll not found. Trying XInput9_1_0.dll instead...
+<RI> Input initialized.
+<RI> Initialized touch support.
+UnloadTime: 0.735700 ms
+SDSandbox Server starting. 
+(Filename: C:\buildslave\unity\build\Runtime/Export/Debug/Debug.bindings.h Line: 35)
+
+SocketException: Address already in use
+  at System.Net.Sockets.Socket.Bind (System.Net.EndPoint localEP) [0x00043] in <84a6f92a7818440db25762d40b5eb9dd>:0 
+  at tk.TcpServer.Bind (System.String ip, System.Int32 port) [0x00022] in <a938f458668b4f94941fbcb4ec987ccd>:0 
+  at tk.TcpServer.Run (System.String ip, System.Int32 port) [0x00000] in <a938f458668b4f94941fbcb4ec987ccd>:0 
+  at SandboxServer.Start () [0x0005e] in <a938f458668b4f94941fbcb4ec987ccd>:0 
+ 
+(Filename: <84a6f92a7818440db25762d40b5eb9dd> Line: 0)
+
+Setting up 8 worker threads for Enlighten.
+  Thread -> id: 5a68 Server stopped. 
+(Filename: C:\buildslave\unity\build\Runtime/Export/Debug/Debug.bindings.h Line: 35)
+
+: 585c -> priority: 1 
+  Thread -> id: 555c -> priority: 1 
+  Thread -> id: a98 -> priority: 1 
+  Thread -> id: db4 -> priority: 1 
+  Thread -> id: 224 -> priority: 1 
+Server stopped. 
+(Filename: C:\buildslave\unity\build\Runtime/Export/Debug/Debug.bindings.h Line: 35)
+

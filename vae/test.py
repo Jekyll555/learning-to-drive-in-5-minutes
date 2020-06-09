@@ -8,13 +8,16 @@ import cv2
 import numpy as np
 from stable_baselines.common import set_global_seeds
 
+from vae.data_loader import get_image_augmenter
 from vae.controller import VAEController
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--folder', help='Log folder', type=str, default='logs/recorded_data/')
 parser.add_argument('-vae', '--vae-path', help='Path to saved VAE', type=str, default='')
-parser.add_argument('--n-samples', help='Max number of samples', type=int, default=20)
+parser.add_argument('-n', '--n-samples', help='Max number of samples', type=int, default=20)
 parser.add_argument('--seed', help='Random generator seed', type=int, default=0)
+parser.add_argument('-augment', '--augment', action='store_true', default=False,
+                    help='Use image augmenter')
 args = parser.parse_args()
 
 set_global_seeds(args.seed)
@@ -29,6 +32,9 @@ images = [im for im in os.listdir(args.folder) if im.endswith('.jpg')]
 images = np.array(images)
 n_samples = len(images)
 
+augmenter = None
+if args.augment:
+    augmenter = get_image_augmenter()
 
 for i in range(args.n_samples):
     # Load test image
@@ -36,9 +42,18 @@ for i in range(args.n_samples):
     image_path = args.folder + images[image_idx]
     image = cv2.imread(image_path)
 
-    encoded = vae.encode_from_raw_image(image)
+    if augmenter is not None:
+        input_image = augmenter.augment_image(image)
+    else:
+        input_image = image
+
+    encoded = vae.encode_from_raw_image(input_image)
     reconstructed_image = vae.decode(encoded)[0]
     # Plot reconstruction
     cv2.imshow("Original", image)
+
+    if augmenter is not None:
+        cv2.imshow("Augmented", input_image)
+
     cv2.imshow("Reconstruction", reconstructed_image)
     cv2.waitKey(0)

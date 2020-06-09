@@ -14,7 +14,6 @@ import gym
 import numpy as np
 from stable_baselines.common import set_global_seeds
 
-from config import ENV_ID
 from utils.utils import ALGOS, create_test_env, get_latest_run_id, get_saved_hyperparams
 
 parser = argparse.ArgumentParser()
@@ -38,10 +37,12 @@ parser.add_argument('--reward-log', help='Where to log reward', default='', type
 parser.add_argument('-vae', '--vae-path', help='Path to saved VAE', type=str, default='')
 parser.add_argument('-best', '--best-model', action='store_true', default=False,
                     help='Use best saved model of that experiment (if it exists)')
+parser.add_argument('--level', help='Level index', type=int, default=0)
 args = parser.parse_args()
 
 algo = args.algo
 folder = args.folder
+ENV_ID = "DonkeyVae-v0-level-{}".format(args.level)
 
 if args.exp_id == 0:
     args.exp_id = get_latest_run_id(os.path.join(folder, algo), ENV_ID)
@@ -70,7 +71,7 @@ hyperparams['vae_path'] = args.vae_path
 
 log_dir = args.reward_log if args.reward_log != '' else None
 
-env = create_test_env(stats_path=stats_path, seed=args.seed, log_dir=log_dir,
+env = create_test_env(args.level, stats_path=stats_path, seed=args.seed, log_dir=log_dir,
                       hyperparams=hyperparams)
 
 model = ALGOS[algo].load(model_path)

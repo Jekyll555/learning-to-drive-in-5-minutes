@@ -2,12 +2,15 @@ import time
 from collections import deque
 
 import numpy as np
+import tensorflow as tf
+
 from stable_baselines import SAC
 from stable_baselines import logger
 from stable_baselines.common.vec_env import VecEnv
 from stable_baselines.a2c.utils import total_episode_reward_logger
-from stable_baselines.ppo2.ppo2 import safe_mean, get_schedule_fn
-from stable_baselines.common import TensorboardWriter
+from stable_baselines.common.math_util import safe_mean, unscale_action, scale_action
+from stable_baselines.common.schedules import get_schedule_fn
+from stable_baselines.common import TensorboardWriter, SetVerbosity
 
 
 class SACWithVAE(SAC):
@@ -46,17 +49,30 @@ class SACWithVAE(SAC):
         return mb_infos_vals
 
     def learn(self, total_timesteps, callback=None,
-              log_interval=1, tb_log_name="SAC", print_freq=100):
+              log_interval=4, tb_log_name="SAC", print_freq=100, reset_num_timesteps=True, replay_wrapper=None):
 
-        with TensorboardWriter(self.graph, self.tensorboard_log, tb_log_name) as writer:
+        new_tb_log = self._init_num_timesteps(reset_num_timesteps)
+        #callback = self._init_callback(callback)
+
+        if replay_wrapper is not None:
+            self.replay_buffer = replay_wrapper(self.replay_buffer)
+
+        with SetVerbosity(self.verbose), TensorboardWriter(self.graph, self.tensorboard_log, tb_log_name, new_tb_log) \
+                as writer:
 
             self._setup_learn()
 
             # Transform to callable if needed
             self.learning_rate = get_schedule_fn(self.learning_rate)
+            # Initial learning rate
+            #current_lr = self.learning_rate(1)
 
             start_time = time.time()
             episode_rewards = [0.0]
+            episode_successes = []
+            if self.action_noise is not None:
+                self.action_noise.reset()
+
             is_teleop_env = hasattr(self.env, "wait_for_teleop_reset")
             # TeleopEnv
             if is_teleop_env:
@@ -85,39 +101,64 @@ class SACWithVAE(SAC):
 
                 # Before training starts, randomly sample actions
                 # from a uniform distribution for better exploration.
-                # Afterwards, use the learned policy.
-                if step < self.learning_starts:
-                    action = self.env.action_space.sample()
-                    # No need to rescale when sampling random action
-                    rescaled_action = action
+                # Afterwards, use the learned policy
+                # if random_exploration is set to 0 (normal setting)
+                if self.num_timesteps < self.learning_starts or np.random.rand() < self.random_exploration:
+                    # actions sampled from action space are from range specific to the environment
+                    # but algorithm operates on tanh-squashed actions therefore simple scaling is used
+                    unscaled_action = self.env.action_space.sample()
+                    action = scale_action(self.action_space, unscaled_action)
                 else:
                     action = self.policy_tf.step(obs[None], deterministic=False).flatten()
-                    # Rescale from [-1, 1] to the correct bounds
-                    rescaled_action = action * np.abs(self.action_space.low)
+                    # Add noise to the action (improve exploration,
+                    # not needed in general)
+                    if self.action_noise is not None:
+                        action = np.clip(action + self.action_noise(), -1, 1)
+                    # inferred actions need to be transformed to environment action_space before stepping
+                    unscaled_action = unscale_action(self.action_space, action)
 
                 assert action.shape == self.env.action_space.shape
 
-                new_obs, reward, done, info = self.env.step(rescaled_action)
+                new_obs, reward, done, info = self.env.step(unscaled_action)
                 ep_len += 1
 
                 if print_freq > 0 and ep_len % print_freq == 0 and ep_len > 0:
                     print("{} steps".format(ep_len))
 
+                self.num_timesteps += 1
+
+                # Only stop training if return value is False, not when it is None. This is for backwards
+                # compatibility with callbacks that have no return statement.
+                # if callback.on_step() is False:
+                #     break
+
+                # Store only the unnormalized version
+                if self._vec_normalize_env is not None:
+                    new_obs_ = self._vec_normalize_env.get_original_obs().squeeze()
+                    reward_ = self._vec_normalize_env.get_original_reward().squeeze()
+                else:
+                    # Avoid changing the original ones
+                    obs_, new_obs_, reward_ = obs, new_obs, reward
+
                 # Store transition in the replay buffer.
-                self.replay_buffer.add(obs, action, reward, new_obs, float(done))
+                #self.replay_buffer.add(obs_, action, reward_, new_obs_, float(done), info)
+                self.replay_buffer.add(obs_, action, reward_, new_obs_, float(done))
                 obs = new_obs
+                # Save the unnormalized observation
+                if self._vec_normalize_env is not None:
+                    obs_ = new_obs_
 
                 # Retrieve reward and episode length if using Monitor wrapper
                 maybe_ep_info = info.get('episode')
                 if maybe_ep_info is not None:
-                    ep_info_buf.extend([maybe_ep_info])
+                    self.ep_info_buf.extend([maybe_ep_info])
 
                 if writer is not None:
                     # Write reward per episode to tensorboard
-                    ep_reward = np.array([reward]).reshape((1, -1))
+                    ep_reward = np.array([reward_]).reshape((1, -1))
                     ep_done = np.array([done]).reshape((1, -1))
-                    self.episode_reward = total_episode_reward_logger(self.episode_reward, ep_reward,
-                                                                      ep_done, writer, step)
+                    self.episode_reward = tf_util.total_episode_reward_logger(self.episode_reward, ep_reward,
+                                                        ep_done, writer, self.num_timesteps)
 
                 if ep_len > self.train_freq:
                     print("Additional training")
@@ -149,17 +190,20 @@ class SACWithVAE(SAC):
                 else:
                     mean_reward = round(float(np.mean(episode_rewards[-101:-1])), 1)
 
-                num_episodes = len(episode_rewards)
+                num_episodes = len(episode_rewards) - 1
                 if self.verbose >= 1 and done and log_interval is not None and len(episode_rewards) % log_interval == 0:
                     fps = int(step / (time.time() - start_time))
                     logger.logkv("episodes", num_episodes)
                     logger.logkv("mean 100 episode reward", mean_reward)
-                    logger.logkv('ep_rewmean', safe_mean([ep_info['r'] for ep_info in ep_info_buf]))
-                    logger.logkv('eplenmean', safe_mean([ep_info['l'] for ep_info in ep_info_buf]))
+                    if len(self.ep_info_buf) > 0 and len(self.ep_info_buf[0]) > 0:
+                        logger.logkv('ep_rewmean', safe_mean([ep_info['r'] for ep_info in self.ep_info_buf]))
+                        logger.logkv('eplenmean', safe_mean([ep_info['l'] for ep_info in self.ep_info_buf]))
                     logger.logkv("n_updates", self.n_updates)
                     logger.logkv("current_lr", current_lr)
                     logger.logkv("fps", fps)
                     logger.logkv('time_elapsed', "{:.2f}".format(time.time() - start_time))
+                    if len(episode_successes) > 0:
+                        logger.logkv("success rate", np.mean(episode_successes[-100:]))
                     if len(infos_values) > 0:
                         for (name, val) in zip(self.infos_names, infos_values):
                             logger.logkv(name, val)

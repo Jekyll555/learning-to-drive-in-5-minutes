@@ -15,8 +15,8 @@ from .data_loader import DataLoader
 from .model import ConvVAE
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-f', '--folder', help='Path to a folder containing images for training', type=str,
-                    default='logs/recorded_data/')
+parser.add_argument('-f', '--folders', help='Path to folders containing images for training', type=str,
+                    nargs='+', required=True)
 parser.add_argument('--z-size', help='Latent space', type=int, default=512)
 parser.add_argument('--seed', help='Random generator seed', type=int, default=0)
 parser.add_argument('--n-samples', help='Max number of samples', type=int, default=-1)
@@ -30,8 +30,14 @@ args = parser.parse_args()
 
 set_global_seeds(args.seed)
 
-if not args.folder.endswith('/'):
-    args.folder += '/'
+folders, images = [], []
+for folder in args.folders:
+    if not folder.endswith('/'):
+        folder += '/'
+    folders.append(folder)
+    images_ = [folder + im for im in os.listdir(folder) if im.endswith('.jpg')]
+    print("{}: {} images".format(folder, len(images_)))
+    images.append(images_)
 
 vae = ConvVAE(z_size=args.z_size,
               batch_size=args.batch_size,
@@ -41,8 +47,8 @@ vae = ConvVAE(z_size=args.z_size,
               is_training=True,
               reuse=False)
 
-images = [im for im in os.listdir(args.folder) if im.endswith('.jpg')]
-images = np.array(images)
+
+images = np.concatenate(images)
 n_samples = len(images)
 
 if args.n_samples > 0:
@@ -59,15 +65,20 @@ np.random.shuffle(indices)
 minibatchlist = [np.array(sorted(indices[start_idx:start_idx + args.batch_size]))
                  for start_idx in range(0, len(indices) - args.batch_size + 1, args.batch_size)]
 
-data_loader = DataLoader(minibatchlist, images, n_workers=2, folder=args.folder)
+data_loader = DataLoader(minibatchlist, images, n_workers=2)
 
 vae_controller = VAEController(z_size=args.z_size)
 vae_controller.vae = vae
+best_loss = np.inf
+vae_id = int(time.time())
+save_path = "logs/vae-{}_{}.pkl".format(args.z_size, vae_id)
+best_model_path = "logs/vae-{}_{}_best.pkl".format(args.z_size, vae_id)
+os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
 for epoch in range(args.n_epochs):
     pbar = tqdm(total=len(minibatchlist))
-    for obs in data_loader:
-        feed = {vae.input_tensor: obs}
+    for obs, target_obs in data_loader:
+        feed = {vae.input_tensor: obs, vae.target_tensor: target_obs}
         (train_loss, r_loss, kl_loss, train_step, _) = vae.sess.run([
             vae.loss,
             vae.r_loss,
@@ -85,8 +96,7 @@ for epoch in range(args.n_epochs):
     # Load test image
     if args.verbose >= 1:
         image_idx = np.random.randint(n_samples)
-        image_path = args.folder + images[image_idx]
-        image = cv2.imread(image_path)
+        image = cv2.imread(images[image_idx])
         r = ROI
         im = image[int(r[1]):int(r[1] + r[3]), int(r[0]):int(r[0] + r[2])]
 

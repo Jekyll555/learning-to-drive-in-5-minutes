@@ -9,6 +9,7 @@ import os
 import cloudpickle
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.layers import Conv2D
 
 
 def conv_to_fc(input_tensor):
@@ -36,7 +37,7 @@ class ConvVAE(object):
     :param reuse: (bool)
     """
 
-    def __init__(self, z_size=512, batch_size=100, learning_rate=0.0001,
+    def __init__(self, z_size=32, batch_size=100, learning_rate=0.0001,
                  kl_tolerance=0.5, is_training=True, beta=1.0, reuse=False):
         self.z_size = z_size
         self.batch_size = batch_size
@@ -61,6 +62,7 @@ class ConvVAE(object):
         self.graph = tf.Graph()
         with self.graph.as_default():
             self.input_tensor = tf.placeholder(tf.float32, shape=[None, 80, 160, 3])
+            self.target_tensor = tf.placeholder(tf.float32, shape=[None, 80, 160, 3])
 
             # Encoder
             h = tf.layers.conv2d(self.input_tensor, 32, 4, strides=2, activation=tf.nn.relu, name="enc_conv1")
@@ -96,7 +98,7 @@ class ConvVAE(object):
                 self.global_step = tf.Variable(0, name='global_step', trainable=False)
                 # reconstruction loss
                 self.r_loss = tf.reduce_sum(
-                    tf.square(self.input_tensor - self.output_tensor),
+                    tf.square(self.target_tensor - self.output_tensor),
                     reduction_indices=[1, 2, 3]
                 )
                 self.r_loss = tf.reduce_mean(self.r_loss)

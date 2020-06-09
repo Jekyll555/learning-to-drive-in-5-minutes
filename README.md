@@ -1,3 +1,7 @@
+# <SPOILER : this is a experimental fork, work in progress! >
+
+use with caution, eager to chat about it ;o)
+
 # Learning to Drive Smoothly in Minutes
 
 Learning to drive smoothly in minutes, using a reinforcement learning algorithm -- Soft Actor-Critic (SAC) -- and a Variational AutoEncoder (VAE) in the Donkey Car simulator.

@@ -1,26 +1,23 @@
-# Original author: Tawn Kramer
 import time
 
 
 class FPSTimer(object):
-    """
-    Helper function to monitor the speed of the control.
-    :param verbose: (int)
-    """
-    def __init__(self, verbose=0):
-        self.start_time = time.time()
+    '''
+    Every N on_frame events, give the average iterations per interval.
+    '''
+    def __init__(self, N=100):
+        self.t = time.time()
         self.iter = 0
-        self.verbose = verbose
+        self.N = N
 
     def reset(self):
-        self.start_time = time.time()
+        self.t = time.time()
         self.iter = 0
 
     def on_frame(self):
         self.iter += 1
-        if self.iter == 100:
-            end_time = time.time()
-            if self.verbose >= 1:
-                print('{:.2f} fps'.format(100.0 / (end_time - self.start_time)))
-            self.start_time = time.time()
+        if self.iter == self.N:
+            e = time.time()
+            print('fps', float(self.N) / (e - self.t))
+            self.t = time.time()
             self.iter = 0

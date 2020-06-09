@@ -16,12 +16,15 @@ import yaml
 from stable_baselines.common import set_global_seeds
 from stable_baselines.common.vec_env import VecFrameStack, VecNormalize, DummyVecEnv
 from stable_baselines.ddpg import AdaptiveParamNoiseSpec, NormalActionNoise, OrnsteinUhlenbeckActionNoise
-from stable_baselines.ppo2.ppo2 import constfn
+from stable_baselines.common.schedules import constfn #SB 2.10
+#from stable_baselines.ppo2.ppo2 import constfn
+from stable_baselines.gail import ExpertDataset
 
 from config import MIN_THROTTLE, MAX_THROTTLE, FRAME_SKIP,\
-    MAX_CTE_ERROR, SIM_PARAMS, N_COMMAND_HISTORY, Z_SIZE, BASE_ENV, ENV_ID, MAX_STEERING_DIFF
+    MAX_CTE_ERROR, SIM_PARAMS, N_COMMAND_HISTORY, Z_SIZE, BASE_ENV,  MAX_STEERING_DIFF
 from utils.utils import make_env, ALGOS, linear_schedule, get_latest_run_id, load_vae, create_callback
 from teleop.teleop_client import TeleopEnv
+from teleop.recorder import Recorder
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-tb', '--tensorboard-log', help='Tensorboard log dir', default='', type=str)
@@ -38,13 +41,23 @@ parser.add_argument('-vae', '--vae-path', help='Path to saved VAE', type=str, de
 parser.add_argument('--save-vae', action='store_true', default=False,
                     help='Save VAE')
 parser.add_argument('--seed', help='Random generator seed', type=int, default=0)
+parser.add_argument('--level', help='Level index', type=int, default=0)
 parser.add_argument('--random-features', action='store_true', default=False,
                     help='Use random features')
 parser.add_argument('--teleop', action='store_true', default=False,
                     help='Use teleoperation for training')
+parser.add_argument('-pretrain', '--pretrain-path', type=str,
+                    help='Path to an expert dataset for pretraining')
+parser.add_argument('--n-epochs', type=int, default=50,
+                    help='Number of epochs when doing pretraining')
+parser.add_argument('--batch-size', type=int, default=64,
+                    help='Minibatch size when doing pretraining')
+parser.add_argument('--traj-limitation', type=int, default=-1,
+                    help='The number of trajectory to use (if -1, load all)')
 args = parser.parse_args()
 
 set_global_seeds(args.seed)
+ENV_ID = "DonkeyVae-v0-level-{}".format(args.level)
 
 if args.trained_agent != "":
     assert args.trained_agent.endswith('.pkl') and os.path.isfile(args.trained_agent), \
@@ -71,7 +84,6 @@ with open('hyperparams/{}.yml'.format(args.algo), 'r') as f:
     hyperparams = yaml.load(f, Loader=yaml.UnsafeLoader)[BASE_ENV]
 
 
-hyperparams['seed'] = args.seed
 # Sort hyperparams that will be saved
 saved_hyperparams = OrderedDict([(key, hyperparams[key]) for key in sorted(hyperparams.keys())])
 # save vae path
@@ -82,6 +94,8 @@ if vae is not None:
 # Save simulation params
 for key in SIM_PARAMS:
     saved_hyperparams[key] = eval(key)
+saved_hyperparams['seed'] = args.seed
+#print ordered Dict
 pprint(saved_hyperparams)
 
 # Compute and create log path
@@ -120,10 +134,13 @@ if 'normalize' in hyperparams.keys():
         normalize = True
     del hyperparams['normalize']
 
+if 'policy_kwargs' in hyperparams.keys():
+    hyperparams['policy_kwargs'] = eval(hyperparams['policy_kwargs'])
+
 if not args.teleop:
-    env = DummyVecEnv([make_env(args.seed, vae=vae, teleop=args.teleop)])
+    env = DummyVecEnv([make_env(args.level, args.seed, vae=vae, teleop=args.teleop)])
 else:
-    env = make_env(args.seed, vae=vae, teleop=args.teleop,
+    env = make_env(args.level, args.seed, vae=vae, teleop=args.teleop,
                    n_stack=hyperparams.get('frame_stack', 1))()
 
 if normalize:
@@ -142,8 +159,8 @@ if hyperparams.get('frame_stack', False):
     print("Stacking {} frames".format(n_stack))
     del hyperparams['frame_stack']
 
-# Parse noise string for DDPG
-if args.algo == 'ddpg' and hyperparams.get('noise_type') is not None:
+# Parse noise string for DDPG and SAC
+if args.algo in ['ddpg', 'sac'] and hyperparams.get('noise_type') is not None:
     noise_type = hyperparams['noise_type'].strip()
     noise_std = hyperparams['noise_std']
     n_actions = env.action_space.shape[0]
@@ -179,6 +196,37 @@ else:
     # Train an agent from scratch
     model = ALGOS[args.algo](env=env, tensorboard_log=tensorboard_log, verbose=1, **hyperparams)
 
+if args.pretrain_path is not None:
+    print("Petraining model for {} epochs".format(args.n_epochs))
+    if os.path.isdir(args.pretrain_path):
+        args.pretrain_path = os.path.join(args.pretrain_path, 'expert_dataset.npz')
+    assert args.pretrain_path.endswith('.npz') and os.path.isfile(args.pretrain_path), "Invalid pretain path:{}".format(args.pretrain_path)
+    expert_dataset = np.load(args.pretrain_path)
+    # Convert dataset if needed
+    if vae is not None:
+        print("Converting to vae latent space...")
+        expert_dataset = Recorder.convert_obs_to_latent_vec(expert_dataset, vae, N_COMMAND_HISTORY)
+    # Create the dataloader and petrain (Behavior-Cloning)
+    dataset = ExpertDataset(traj_data=expert_dataset,
+                            traj_limitation=args.traj_limitation, batch_size=args.batch_size)
+
+    # Fill the replay buffer
+    if args.algo == "sac":
+        print("Filling replay buffer")
+        for i in range(len(expert_dataset['obs']) - 1):
+            done = expert_dataset['episode_starts'][i + 1]
+            obs, next_obs = expert_dataset['obs'][i], expert_dataset['obs'][i + 1]
+            action, reward = expert_dataset['actions'][i], expert_dataset['rewards'][i]
+            model.replay_buffer.add(obs, action, reward, next_obs, float(done))
+        # Initialize the value fn
+        model.n_updates = 0
+        for _ in range(10):
+            model.optimize(max(model.batch_size, model.learning_starts), None, model.learning_rate(1))
+    else:
+        # TODO: pretrain also the std to match the one from the dataset
+        model.pretrain(dataset, n_epochs=args.n_epochs)
+    del dataset
+
 # Teleoperation mode:
 # we don't wrap the environment with a monitor or in a vecenv
 if args.teleop:
@@ -210,6 +258,7 @@ else:
     # HACK to bypass Monitor wrapper
     env.envs[0].env.exit_scene()
 
+print("Saving model to {}".format(save_path))
 # Save trained model
 model.save(os.path.join(save_path, ENV_ID), cloudpickle=True)
 # Save hyperparams
