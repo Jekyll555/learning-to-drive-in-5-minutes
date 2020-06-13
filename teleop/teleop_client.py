@@ -4,10 +4,14 @@ import argparse
 import os
 import time
 from threading import Event, Thread
+from pprint import pprint
 
 import numpy as np
+import yaml
+
 import pygame
 from pygame.locals import *
+
 from stable_baselines.bench import Monitor
 from stable_baselines.common.vec_env import VecFrameStack, VecNormalize, DummyVecEnv
 
@@ -224,7 +228,7 @@ class TeleopEnv(object):
         if isinstance(donkey_env, Monitor):
             donkey_env = donkey_env.env
 
-        assert isinstance(donkey_env, DonkeyVAEEnv), str(donkey_env)
+        assert isinstance(donkey_env, DonkeyEnv), str(donkey_env)
         self.donkey_env = donkey_env
 
         # Used to prevent from multiple successive key press
@@ -470,10 +474,34 @@ if __name__ == '__main__':
 
     if vae is None:
         N_COMMAND_HISTORY = 0
-
-    env = DonkeyVAEEnv(level=args.level, frame_skip=TEST_FRAME_SKIP, vae=vae, const_throttle=None, min_throttle=MIN_THROTTLE,
+    
+    conf={}
+    conf['frame_skip']=TEST_FRAME_SKIP
+    conf['vae']=vae
+    conf['const_throttle']=None
+    conf['min_throttle']=MIN_THROTTLE
+    conf['max_throttle']=MAX_THROTTLE
+    conf['max_cte']=10
+    conf['n_command_history']=N_COMMAND_HISTORY
+    conf['seed']=1
+    conf['road_style']=0
+    
+    #conf['n_stack']=n_stack
+    conf['body_style']= 'donkey'
+    conf['body_rgb']= (128, 128, 128)
+    conf['car_name']= 'car'
+    conf['font_size']= 100
+    conf['racer_name']= 'B3'
+    conf['country']= 'DE'
+    conf['bio']= 'supersticiousCodingInTheScripts'
+    
+    '''
+    env = DonkeyEnv(level=args.level, frame_skip=1, vae=vae, const_throttle=None, min_throttle=MIN_THROTTLE,
                        max_throttle=MAX_THROTTLE, max_cte_error=10, n_command_history=N_COMMAND_HISTORY,
                        seed=1, road_style=0)
+    '''
+    env = DonkeyEnv(level=args.level, conf=conf)
+    
     env = Recorder(env, folder=args.record_folder, verbose=1)
     try:
         env = TeleopEnv(env, model=model)

@@ -251,8 +251,8 @@ class DonkeyEnv(gym.Env):
             self.stacked_obs[..., -observation.shape[-1]:] = observation
             return self.stacked_obs, reward, done, info
 
-        return self.vae.encode(observation), reward, done, info
-#        return observation, reward, done, info
+#        return self.vae.encode(observation), reward, done, info
+        return observation, reward, done, info
 
     def step(self, action):
         """
@@ -301,8 +301,8 @@ class DonkeyEnv(gym.Env):
             return self.stacked_obs
             
         time.sleep(1)
-        return self.vae.encode(observation)
-#        return observation
+ #       return self.vae.encode(observation)
+        return observation
 
     def render(self, mode="human", close=False):
         """

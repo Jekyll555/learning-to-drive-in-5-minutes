@@ -84,7 +84,8 @@ class DonkeyUnitySimContoller():
         self.client.stop()
 
     def render(self, mode):
-        pass
+        #pass
+        return self.handler.last_obs
 
     def is_game_over(self):
         return self.handler.is_game_over()

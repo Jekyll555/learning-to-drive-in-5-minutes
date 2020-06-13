@@ -9,7 +9,18 @@ import numpy as np
 from stable_baselines.common import set_global_seeds
 from tqdm import tqdm
 
-from config import ROI
+#from config import ROI
+#TODO
+# Raw camera input
+CAMERA_HEIGHT = 120
+CAMERA_WIDTH = 160
+CAMERA_RESOLUTION = (CAMERA_WIDTH, CAMERA_HEIGHT)
+MARGIN_TOP = CAMERA_HEIGHT // 3
+# Region Of Interest
+# r = [margin_left, margin_top, width, height]
+ROI = [0, MARGIN_TOP, CAMERA_WIDTH, CAMERA_HEIGHT - MARGIN_TOP]
+
+
 from vae.controller import VAEController
 from .data_loader import DataLoader
 from .model import ConvVAE
