@@ -9,7 +9,7 @@ import os
 import cloudpickle
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D
+from tensorflow.keras.layers import Conv2D, Dense, Conv2DTranspose
 
 
 def conv_to_fc(input_tensor):
@@ -65,16 +65,16 @@ class ConvVAE(object):
             self.target_tensor = tf.placeholder(tf.float32, shape=[None, 80, 160, 3])
 
             # Encoder
-            h = tf.layers.conv2d(self.input_tensor, 32, 4, strides=2, activation=tf.nn.relu, name="enc_conv1")
-            h = tf.layers.conv2d(h, 64, 4, strides=2, activation=tf.nn.relu, name="enc_conv2")
-            h = tf.layers.conv2d(h, 128, 4, strides=2, activation=tf.nn.relu, name="enc_conv3")
-            h = tf.layers.conv2d(h, 256, 4, strides=2, activation=tf.nn.relu, name="enc_conv4")
+            h = Conv2D( 32, 4, strides=2, activation=tf.nn.relu, name="enc_conv1")(self.input_tensor)
+            h = Conv2D( 64, 4, strides=2, activation=tf.nn.relu, name="enc_conv2")(h)
+            h = Conv2D( 128, 4, strides=2, activation=tf.nn.relu, name="enc_conv3")(h)
+            h = Conv2D( 256, 4, strides=2, activation=tf.nn.relu, name="enc_conv4")(h)
             # h = tf.reshape(h, [-1, 3 * 8 * 256])
             h = conv_to_fc(h)
 
             # VAE
-            self.mu = tf.layers.dense(h, self.z_size, name="enc_fc_mu")
-            self.logvar = tf.layers.dense(h, self.z_size, name="enc_fc_log_var")
+            self.mu = Dense( self.z_size, name="enc_fc_mu")(h)
+            self.logvar = Dense( self.z_size, name="enc_fc_log_var")(h)
             self.sigma = tf.exp(self.logvar / 2.0)
             self.epsilon = tf.random_normal([self.batch_size, self.z_size])
             # self.epsilon = tf.random_normal([None, self.z_size])
@@ -85,13 +85,13 @@ class ConvVAE(object):
                 self.z = self.mu
 
             # Decoder
-            h = tf.layers.dense(self.z, 3 * 8 * 256, name="dec_fc")
+            h = Dense( 3 * 8 * 256, name="dec_fc")(self.z)
             h = tf.reshape(h, [-1, 3, 8, 256])
-            h = tf.layers.conv2d_transpose(h, 128, 4, strides=2, activation=tf.nn.relu, name="dec_deconv1")
-            h = tf.layers.conv2d_transpose(h, 64, 4, strides=2, activation=tf.nn.relu, name="dec_deconv2")
-            h = tf.layers.conv2d_transpose(h, 32, 5, strides=2, activation=tf.nn.relu, name="dec_deconv3")
-            self.output_tensor = tf.layers.conv2d_transpose(h, 3, 4, strides=2, activation=tf.nn.sigmoid,
-                                                            name="dec_deconv4")
+            h = Conv2DTranspose( 128, 4, strides=2, activation=tf.nn.relu, name="dec_deconv1")(h)
+            h = Conv2DTranspose( 64, 4, strides=2, activation=tf.nn.relu, name="dec_deconv2")(h)
+            h = Conv2DTranspose( 32, 5, strides=2, activation=tf.nn.relu, name="dec_deconv3")(h)
+            self.output_tensor = Conv2DTranspose( 3, 4, strides=2, activation=tf.nn.sigmoid,
+                                                            name="dec_deconv4")(h)
 
             # train ops
             if self.is_training:
