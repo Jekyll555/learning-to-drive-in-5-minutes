@@ -1,8 +1,10 @@
 # Original code from https://github.com/araffin/robotics-rl-srl
 # Authors: Antonin Raffin, René Traoré, Ashley Hill
+import os
 import queue
 import time
 from multiprocessing import Queue, Process
+from threading import Thread
 
 import cv2
 import numpy as np
@@ -78,7 +80,7 @@ def denormalize(x, mode="rl"):
     return (255 * np.clip(x, 0, 1)).astype(np.uint8)
 
 
-def preprocess_image(image, convert_to_rgb=False):
+def preprocess_image(image, convert_to_rgb=True):
     """
     Crop, resize and normalize image.
     Optionnally it also converts the image from BGR to RGB.
@@ -146,7 +148,12 @@ class DataLoader(object):
 
     def start_process(self):
         """Start preprocessing process"""
-        self.process = Process(target=self._run)
+                
+        if os.name == 'nt':
+            self.process = Thread(target=self._run)
+        else:
+            self.process = Process(target=self._run)
+            
         # Make it a deamon, so it will be deleted at the same time
         # of the main process
         self.process.daemon = True
@@ -193,7 +200,8 @@ class DataLoader(object):
         :param image_path: (str) path to an image (without the 'data/' prefix)
         :return: (np.ndarray)
         """
-        image_path = folder + image_path
+        #TODO
+        #image_path = folder + image_path
 
         im = cv2.imread(image_path)
         if im is None:

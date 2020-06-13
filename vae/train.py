@@ -3,6 +3,7 @@ Train a VAE model using saved images in a folder
 """
 import argparse
 import os
+import time
 
 import cv2
 import numpy as np
@@ -76,7 +77,8 @@ np.random.shuffle(indices)
 minibatchlist = [np.array(sorted(indices[start_idx:start_idx + args.batch_size]))
                  for start_idx in range(0, len(indices) - args.batch_size + 1, args.batch_size)]
 
-data_loader = DataLoader(minibatchlist, images, n_workers=2)
+#data_loader = DataLoader(minibatchlist, images, n_workers=1, folder=folder )
+data_loader = DataLoader(minibatchlist, images, n_workers=2 )
 
 vae_controller = VAEController(z_size=args.z_size)
 vae_controller.vae = vae
@@ -88,8 +90,11 @@ os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
 for epoch in range(args.n_epochs):
     pbar = tqdm(total=len(minibatchlist))
-    for obs, target_obs in data_loader:
-        feed = {vae.input_tensor: obs, vae.target_tensor: target_obs}
+    #TODO
+    #for obs, target_obs in data_loader:
+    #feed = {vae.input_tensor: obs, vae.target_tensor: obs}
+    for obs in data_loader:
+        feed = {vae.input_tensor: obs, vae.target_tensor: obs}
         (train_loss, r_loss, kl_loss, train_step, _) = vae.sess.run([
             vae.loss,
             vae.r_loss,
@@ -108,8 +113,10 @@ for epoch in range(args.n_epochs):
     if args.verbose >= 1:
         image_idx = np.random.randint(n_samples)
         image = cv2.imread(images[image_idx])
-        r = ROI
-        im = image[int(r[1]):int(r[1] + r[3]), int(r[0]):int(r[0] + r[2])]
+        #CHECK TODO
+        #r = ROI
+        #im = image[int(r[1]):int(r[1] + r[3]), int(r[0]):int(r[0] + r[2])]
+        im=image
 
         encoded = vae_controller.encode(im)
         reconstructed_image = vae_controller.decode(encoded)[0]
