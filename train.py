@@ -6,6 +6,7 @@ import time
 import warnings
 from collections import OrderedDict
 from pprint import pprint
+import logging
 
 # Remove warnings
 warnings.filterwarnings("ignore", category=FutureWarning, module='tensorflow')
@@ -25,6 +26,8 @@ from config import MIN_THROTTLE, MAX_THROTTLE, FRAME_SKIP,\
 from utils.utils import make_env, ALGOS, linear_schedule, get_latest_run_id, load_vae, create_callback
 from teleop.teleop_client import TeleopEnv
 from teleop.recorder import Recorder
+
+#logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-tb', '--tensorboard-log', help='Tensorboard log dir', default='', type=str)

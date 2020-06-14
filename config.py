@@ -21,7 +21,7 @@ JERK_REWARD_WEIGHT = 0.0
 # smooth control: 15% -> 0.3 diff in steering allowed
 MAX_STEERING_DIFF = 0.15
 # Negative reward for getting off the road
-REWARD_CRASH = -10
+REWARD_CRASH = -300
 # Penalize the agent even more when being fast
 CRASH_SPEED_WEIGHT = 5
 
@@ -37,7 +37,7 @@ MAX_THROTTLE = 0.5
 #N_COMMAND_HISTORY = 20
 N_COMMAND_HISTORY = 0
 # Max cross track error (used in normal mode to reset the car) 5 for lvl 0, 8 for lvl 4
-MAX_CTE_ERROR = 9.0
+MAX_CTE_ERROR = 10.0
 # Level to use for training
 #LEVEL = 0
 #ENV_ID = "DonkeyVae-v0-level-{}".format(LEVEL)

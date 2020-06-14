@@ -185,13 +185,14 @@ class SACWithVAE(SAC):
                 if len(mb_infos_vals) > 0:
                     infos_values = np.mean(mb_infos_vals, axis=0)
 
-                if len(episode_rewards[-101:-1]) == 0:
-                    mean_reward = -np.inf
-                else:
-                    mean_reward = round(float(np.mean(episode_rewards[-101:-1])), 1)
-
                 num_episodes = len(episode_rewards) - 1
+
                 if self.verbose >= 1 and done and log_interval is not None and len(episode_rewards) % log_interval == 0:
+                    if len(episode_rewards[-101:-1]) == 0:
+                        mean_reward = -np.inf
+                    else:
+                        mean_reward = round(float(np.mean(episode_rewards[-log_interval-1:-1])), 1)
+
                     fps = int(step / (time.time() - start_time))
                     logger.logkv("episodes", num_episodes)
                     logger.logkv("mean 100 episode reward", mean_reward)

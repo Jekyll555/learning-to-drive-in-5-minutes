@@ -306,10 +306,12 @@ def create_callback(algo, save_path, verbose=1):
         """
         global best_mean_reward
         episode_rewards = _locals['episode_rewards']
+        log_interval = _locals['log_interval']
         if len(episode_rewards[-101:-1]) == 0:
             return True
         else:
-            mean_reward = round(float(np.mean(episode_rewards[-101:-1])), 1)
+            mean_reward = round(float(np.mean(episode_rewards[-log_interval-1:-1])), 1)
+
         if mean_reward > best_mean_reward:
             if verbose >= 1:
                 print("*****************")
@@ -317,6 +319,8 @@ def create_callback(algo, save_path, verbose=1):
                 print("*****************")
             _locals['self'].save(save_path)
             best_mean_reward = mean_reward
-
+        # else :
+            # if verbose >= 1:
+            #     print("FAILED new {0:} vs. global best mean {1:}".format(mean_reward, best_mean_reward))
         return True
     return sac_callback

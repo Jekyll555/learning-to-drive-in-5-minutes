@@ -120,7 +120,9 @@ class DonkeyUnitySimHandler(IMesgHandler):
         self.last_throttle = 0.0
         
         self.hit = "none"
+        self.hit_cnt = 0
         self.cte = 0.0
+        self.cte_last =self.cte 
         self.x = 0.0
         self.y = 0.0
         self.z = 0.0
@@ -211,7 +213,9 @@ class DonkeyUnitySimHandler(IMesgHandler):
         self.image_array = np.zeros(self.camera_img_size)
         self.last_obs = self.image_array
         self.hit = "none"
+        self.hit_cnt = 0
         self.cte = 0.0
+        self.cte_last =self.cte 
         self.x = 0.0
         self.y = 0.0
         self.z = 0.0
@@ -233,8 +237,8 @@ class DonkeyUnitySimHandler(IMesgHandler):
 
     def take_action(self, action):
         # VAE
-        if self.verbose:
-            print("act", end='')
+        # if self.verbose:
+        #     print("act", end='')
 
         throttle = action[1]
         self.last_throttle = throttle
@@ -282,7 +286,21 @@ class DonkeyUnitySimHandler(IMesgHandler):
             return -2.0
         '''
         # going fast close to the center of lane yeilds best reward
-        return (1.0 - (math.fabs(self.cte) / self.max_cte)) * self.speed
+        #reward = (1.0 - (math.fabs(self.cte) / self.max_cte)) * self.speed
+        #focus center
+        reward = (1.0 - (math.fabs(self.cte) / self.max_cte)**2) * self.speed
+        #penalize road vertical driving 
+        d_cte = abs(self.cte_last - self.cte)/ (self.max_cte) * 10 
+        d_cte = np.clip(d_cte, 0, 1)
+        reward -= d_cte * self.speed
+        self.cte_last = self.cte
+
+        if done:
+             crash_rew = d_cte * self.speed * REWARD_CRASH
+             crash_rew = np.clip(crash_rew, -450, 0)
+             print("final penalty {0:3.0f} w/ d_cte {1:3.2f} @ speed {2:3.1f}".format(crash_rew, d_cte, self.speed))
+             reward += crash_rew
+        return reward
         
         '''
         # VAE
@@ -299,9 +317,9 @@ class DonkeyUnitySimHandler(IMesgHandler):
 
     def on_telemetry(self, data):
 
-        if self.verbose:
-            #print("telemetry msg rcv'd")
-            print('.', end='')
+        # if self.verbose:
+        #     #print("telemetry msg rcv'd")
+        #     print('.', end='')
 
         imgString = data["image"]
         image = Image.open(BytesIO(base64.b64decode(imgString)))
@@ -385,7 +403,15 @@ class DonkeyUnitySimHandler(IMesgHandler):
             logger.debug(f"game over: cte {self.cte}")
             self.over = True
         elif self.hit != "none":
-            logger.debug(f"game over: hit {self.hit}")
+            self.hit_cnt += 1
+            d_cte_speed = abs(self.cte_last - self.cte)/ (self.max_cte * self.speed)
+            if self.hit_cnt >=1 or d_cte_speed > 0.1 :
+                logger.debug(f"game over: hit {0:} cnt {1:}, d_cte {2:} ".format(self.hit, self.hit_cnt, d_cte_speed))
+                self.over = True
+            else:
+                logger.debug(f"hit event {0:} cnt {1:}, d_cte {2:} ".format(self.hit, self.hit_cnt, d_cte_speed))
+        elif (self.current_step > 100 and self.speed < 1):
+            logger.debug(f"too slow {0:} cnt {1:}, cte {2:} ".format(self.hit, self.hit_cnt, self.cte))
             self.over = True
 
     def on_scene_selection_ready(self, data):
