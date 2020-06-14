@@ -475,6 +475,7 @@ if __name__ == '__main__':
     if vae is None:
         N_COMMAND_HISTORY = 0
     
+     #TODO sync w/ utils
     conf={}
     conf['frame_skip']=TEST_FRAME_SKIP
     conf['vae']=vae
@@ -487,19 +488,19 @@ if __name__ == '__main__':
     conf['road_style']=0
     
     #conf['n_stack']=n_stack
-    conf['body_style']= 'donkey'
-    conf['body_rgb']= (128, 128, 128)
+
+    #for donkey cam, race1
+    conf['body_style']= 'bare'
+    conf['body_rgb']= (0, 0, 0)
     conf['car_name']= 'car'
-    conf['font_size']= 100
+    conf['font_size']= 50
     conf['racer_name']= 'B3'
     conf['country']= 'DE'
-    conf['bio']= 'supersticiousCodingInTheScripts'
+    conf['bio']= 'supersticiousCodingInTheScripts'    
+    conf["img_enc"]= 'PNG'
+    conf["offset_y"]= 1.5
+    conf["fov"]= 120
     
-    '''
-    env = DonkeyEnv(level=args.level, frame_skip=1, vae=vae, const_throttle=None, min_throttle=MIN_THROTTLE,
-                       max_throttle=MAX_THROTTLE, max_cte_error=10, n_command_history=N_COMMAND_HISTORY,
-                       seed=1, road_style=0)
-    '''
     env = DonkeyEnv(level=args.level, conf=conf)
     
     env = Recorder(env, folder=args.record_folder, verbose=1)

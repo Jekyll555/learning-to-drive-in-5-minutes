@@ -127,18 +127,29 @@ def make_env(level=0, seed=0, log_dir=None, vae=None, frame_skip=None,
         conf['max_cte']=MAX_CTE_ERROR
         conf['n_command_history']=N_COMMAND_HISTORY
         conf['n_stack']=n_stack
-        conf['body_style']= 'donkey'
-        conf['body_rgb']= (128, 128, 128)
+
+        #TODO sync w/ teleop
+        #for donkey cam, race1
+        conf['body_style']= 'bare'
+        conf['body_rgb']= (0, 0, 0)
         conf['car_name']= 'car'
-        conf['font_size']= 100
+        conf['font_size']= 50
         conf['racer_name']= 'B3'
         conf['country']= 'DE'
-        conf['bio']= 'supersticiousCodingInTheScripts'
+        conf['bio']= 'supersticiousCodingInTheScripts'    
+        conf["img_enc"]= 'PNG'
+        conf["offset_y"]= 1.5
+        conf["fov"]= 120
         
         env = DonkeyEnv(level=level, conf=conf)
         env.seed(seed)
         if not teleop:
             env = Monitor(env, log_dir, allow_early_resets=True)
+
+        #man, some car config please
+        #if not env.handler.loaded :
+        env.viewer.handler.send_config( conf=conf)
+
         return env
 
     return _init
@@ -301,7 +312,9 @@ def create_callback(algo, save_path, verbose=1):
             mean_reward = round(float(np.mean(episode_rewards[-101:-1])), 1)
         if mean_reward > best_mean_reward:
             if verbose >= 1:
-                print("Saving best model")
+                print("*****************")
+                print("Saving best model new {0:} vs. global best mean {1:}".format(mean_reward, best_mean_reward))
+                print("*****************")
             _locals['self'].save(save_path)
             best_mean_reward = mean_reward
 

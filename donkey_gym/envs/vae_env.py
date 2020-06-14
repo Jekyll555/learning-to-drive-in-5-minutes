@@ -29,7 +29,9 @@ def supply_defaults(conf):
                 ("exe_path", None),
                 ("host", "127.0.0.1"),
                 ("port", 9091),
-                ("vae", 'sac')                ]
+                ("vae", 'sac'),
+
+                            ]
 
     for key, val in defaults:
         if not key in conf:
@@ -251,8 +253,10 @@ class DonkeyEnv(gym.Env):
             self.stacked_obs[..., -observation.shape[-1]:] = observation
             return self.stacked_obs, reward, done, info
 
-#        return self.vae.encode(observation), reward, done, info
-        return observation, reward, done, info
+        if self.vae is None:
+            return observation, reward, done, info
+        return self.vae.encode(observation), reward, done, info
+
 
     def step(self, action):
         """
@@ -300,9 +304,10 @@ class DonkeyEnv(gym.Env):
             self.stacked_obs[..., -observation.shape[-1]:] = observation
             return self.stacked_obs
             
-        time.sleep(1)
- #       return self.vae.encode(observation)
-        return observation
+        time.sleep(0.5)
+        if self.vae is None:
+            return observation
+        return self.vae.encode(observation)
 
     def render(self, mode="human", close=False):
         """

@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 from stable_baselines.common import set_global_seeds
 from tqdm import tqdm
+from .controller import VAEController  
 
 #from config import ROI
 #TODO
@@ -66,7 +67,7 @@ n_samples = len(images)
 if args.n_samples > 0:
     n_samples = min(n_samples, args.n_samples)
 
-print("{} images".format(n_samples))
+print("{0:} images".format(n_samples))
 
 # indices for all time steps where the episode continues
 indices = np.arange(n_samples, dtype='int64')
@@ -114,9 +115,11 @@ for epoch in range(args.n_epochs):
         image_idx = np.random.randint(n_samples)
         image = cv2.imread(images[image_idx])
         #CHECK TODO
-        #r = ROI
-        #im = image[int(r[1]):int(r[1] + r[3]), int(r[0]):int(r[0] + r[2])]
-        im=image
+        if self.vae is None:
+            r = ROI
+            im = image[int(r[1]):int(r[1] + r[3]), int(r[0]):int(r[0] + r[2])]
+        else:
+            im = image
 
         encoded = vae_controller.encode(im)
         reconstructed_image = vae_controller.decode(encoded)[0]

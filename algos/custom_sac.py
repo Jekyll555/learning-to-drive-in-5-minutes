@@ -49,7 +49,7 @@ class SACWithVAE(SAC):
         return mb_infos_vals
 
     def learn(self, total_timesteps, callback=None,
-              log_interval=4, tb_log_name="SAC", print_freq=100, reset_num_timesteps=True, replay_wrapper=None):
+              log_interval=1, tb_log_name="SAC", print_freq=100, reset_num_timesteps=True, replay_wrapper=None):
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         #callback = self._init_callback(callback)

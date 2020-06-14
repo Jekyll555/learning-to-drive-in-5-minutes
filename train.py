@@ -179,6 +179,8 @@ if args.algo in ['ddpg', 'sac'] and hyperparams.get('noise_type') is not None:
     del hyperparams['noise_type']
     del hyperparams['noise_std']
 
+
+
 if args.trained_agent.endswith('.pkl') and os.path.isfile(args.trained_agent):
     # Continue training
     print("Loading pretrained agent")
@@ -195,6 +197,8 @@ if args.trained_agent.endswith('.pkl') and os.path.isfile(args.trained_agent):
 else:
     # Train an agent from scratch
     model = ALGOS[args.algo](env=env, tensorboard_log=tensorboard_log, verbose=1, **hyperparams)
+
+
 
 if args.pretrain_path is not None:
     print("Petraining model for {} epochs".format(args.n_epochs))
@@ -243,6 +247,7 @@ if args.algo == 'sac':
     kwargs.update({'callback': create_callback(args.algo,
                                                os.path.join(save_path, ENV_ID + "_best"),
                                                verbose=1)})
+
 
 model.learn(n_timesteps, **kwargs)
 

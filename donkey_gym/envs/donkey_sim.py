@@ -60,7 +60,7 @@ class DonkeyUnitySimContoller():
     def wait_until_loaded(self):
         while not self.handler.loaded:
             logger.warning("waiting for sim to start..")
-            time.sleep(3.0)
+            time.sleep(0.5)
 
     def reset(self):
         self.handler.reset()
@@ -168,16 +168,17 @@ class DonkeyUnitySimHandler(IMesgHandler):
         return ret_dct
 
     def send_config(self, conf):
-        logger.info("sending car config.")
+        logger.info("sending config bundle.")
         self.set_car_config(conf)
         self.set_racer_bio(conf)
         cam_config = self.extract_keys(conf, ["img_w", "img_h", "img_d", "img_enc", "fov", "fish_eye_x", "fish_eye_y", "offset_x", "offset_y", "offset_z", "rot_x"])
         self.send_cam_config(**cam_config)
-        logger.info("done sending car config.")
+        logger.info("done sending config bundle.")
 
     def set_car_config(self, conf):
         if "body_style" in conf :
             self.send_car_config(conf["body_style"], conf["body_rgb"], conf["car_name"], conf["font_size"])
+            print ("send car config")
 
     def set_racer_bio(self, conf):
         self.conf = conf
@@ -206,7 +207,7 @@ class DonkeyUnitySimHandler(IMesgHandler):
         self.send_control(0.0, 0.0)
         self.send_reset_car()
         self.timer.reset()
-        time.sleep(1)
+        time.sleep(0.5)
         self.image_array = np.zeros(self.camera_img_size)
         self.last_obs = self.image_array
         self.hit = "none"
@@ -442,9 +443,6 @@ class DonkeyUnitySimHandler(IMesgHandler):
         time.sleep(0.1)
 
     def send_racer_bio(self, racer_name, car_name, bio, country):
-        # body_style = "donkey" | "bare" | "car01" choice of string
-        # body_rgb  = (128, 128, 128) tuple of ints
-        # car_name = "string less than 64 char"
         msg = {'msg_type': 'racer_info',
             'racer_name': racer_name,
             'car_name' : car_name,
