@@ -238,6 +238,7 @@ class DonkeyEnv(gym.Env):
         if self.n_command_history > 0:
             self.command_history = np.roll(self.command_history, shift=-self.n_commands, axis=-1)
             self.command_history[..., -self.n_commands:] = action
+            observation = self.vae.encode(observation)
             observation = np.concatenate((observation, self.command_history), axis=-1)
 
         jerk_penalty = self.jerk_penalty()
@@ -253,9 +254,9 @@ class DonkeyEnv(gym.Env):
             self.stacked_obs[..., -observation.shape[-1]:] = observation
             return self.stacked_obs, reward, done, info
 
-        if self.vae is None:
-            return observation, reward, done, info
-        return self.vae.encode(observation), reward, done, info
+        #if self.vae is None:
+        return observation, reward, done, info
+        #return self.vae.encode(observation), reward, done, info
 
 
     def step(self, action):
@@ -297,7 +298,9 @@ class DonkeyEnv(gym.Env):
 
 
         if self.n_command_history > 0:
-            self.command_history = np.concatenate((info, self.command_history), axis=None)
+            #self.command_history = np.concatenate((info, self.command_history), axis=None)
+            observation = self.vae.encode(observation)
+            observation = np.concatenate((observation, self.command_history), axis=-1)
 
         if self.n_stack > 1:
             self.stacked_obs[...] = 0
@@ -305,9 +308,9 @@ class DonkeyEnv(gym.Env):
             return self.stacked_obs
             
         time.sleep(0.5)
-        if self.vae is None:
-            return observation
-        return self.vae.encode(observation)
+        #if self.vae is None:
+        return observation
+        #return self.vae.encode(observation)
 
     def render(self, mode="human", close=False):
         """

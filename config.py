@@ -34,8 +34,8 @@ MIN_THROTTLE = 0.0
 # max_throttle: 0.4 for level 0 and 0.5 for level 1 and 0.5 for level 4
 MAX_THROTTLE = 0.5
 # Number of past commands to concatenate with the input
-#N_COMMAND_HISTORY = 20
-N_COMMAND_HISTORY = 0
+N_COMMAND_HISTORY = 20
+#N_COMMAND_HISTORY = 0
 # Max cross track error (used in normal mode to reset the car) 5 for lvl 0, 8 for lvl 4
 MAX_CTE_ERROR = 10.0
 # Level to use for training
